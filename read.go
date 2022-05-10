@@ -132,17 +132,19 @@ func readDecimal(r io.Reader) (v Decimal, err error) {
 }
 
 func readFloat32(r io.Reader) (v float32, err error) {
-	if err = binary.Read(r, binary.BigEndian, &v); err != nil {
+	var value float32
+	if err = binary.Read(r, binary.BigEndian, &value); err != nil {
 		return
 	}
-	return
+	return value, nil
 }
 
 func readFloat64(r io.Reader) (v float64, err error) {
-	if err = binary.Read(r, binary.BigEndian, &v); err != nil {
+	var value float64
+	if err = binary.Read(r, binary.BigEndian, &value); err != nil {
 		return
 	}
-	return
+	return value, nil
 }
 
 func readTimestamp(r io.Reader) (v time.Time, err error) {
@@ -212,18 +214,10 @@ func readField(r io.Reader) (v interface{}, err error) {
 		return value, nil
 
 	case 'f':
-		var value float32
-		if err = binary.Read(r, binary.BigEndian, &value); err != nil {
-			return
-		}
-		return value, nil
+		return readFloat32(r)
 
 	case 'd':
-		var value float64
-		if err = binary.Read(r, binary.BigEndian, &value); err != nil {
-			return
-		}
-		return value, nil
+		return readFloat64(r)
 
 	case 'D':
 		return readDecimal(r)

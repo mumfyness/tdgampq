@@ -6,6 +6,7 @@
 package amqp091
 
 import (
+	"fmt"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -278,7 +279,11 @@ func (ch *Channel) dispatch(msg message) {
 		// to avoid unexpected interleaving with basic.publish frames if
 		// publishing is happening concurrently
 		ch.m.Lock()
-		ch.send(&channelCloseOk{})
+		// DEBUG - Confirm error handling is safe.
+		if err := ch.send(&channelCloseOk{}); err != nil {
+			fmt.Errorf("error in Channel.dispatch: ch.send(channelCloseOk)")
+			return
+		}
 		ch.m.Unlock()
 		ch.connection.closeChannel(ch, newError(m.ReplyCode, m.ReplyText))
 
@@ -288,7 +293,10 @@ func (ch *Channel) dispatch(msg message) {
 			c <- m.Active
 		}
 		ch.notifyM.RUnlock()
-		ch.send(&channelFlowOk{Active: m.Active})
+		if err := ch.send(&channelFlowOk{Active: m.Active}); err != nil {
+			fmt.Errorf("error in Channel.dispatch: ch.send(channelFlowOk)")
+			return
+		}
 
 	case *basicCancel:
 		ch.notifyM.RLock()
