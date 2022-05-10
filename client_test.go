@@ -7,7 +7,9 @@ package amqp091
 
 import (
 	"bytes"
+	"fmt"
 	"io"
+	"log"
 	"reflect"
 	"testing"
 	"time"
@@ -83,25 +85,41 @@ func (t *server) send(channel int, m message) {
 	if msg, ok := m.(messageWithContent); ok {
 		props, body := msg.getContent()
 		class, _ := msg.id()
-		t.w.WriteFrame(&methodFrame{
+		if err := t.w.WriteFrame(&methodFrame{
 			ChannelId: uint16(channel),
 			Method:    msg,
-		})
-		t.w.WriteFrame(&headerFrame{
+		}); err != nil {
+			// Handle error.
+			fmt.Errorf("error in client_test.send: server.writer.WriteFrame(methodFrame)")
+			return
+		}
+		if err := t.w.WriteFrame(&headerFrame{
 			ChannelId:  uint16(channel),
 			ClassId:    class,
 			Size:       uint64(len(body)),
 			Properties: props,
-		})
-		t.w.WriteFrame(&bodyFrame{
+		}); err != nil {
+			// Handle error.
+			fmt.Errorf("error in client_test.send: server.writer.WriteFrame(headerFrame)")
+			return
+		}
+		if err := t.w.WriteFrame(&bodyFrame{
 			ChannelId: uint16(channel),
 			Body:      body,
-		})
+		}); err != nil {
+			// Handle error.
+			fmt.Errorf("error in client_test.send: server.writer.WriteFrame(bodyFrame)")
+			return
+		}
 	} else {
-		t.w.WriteFrame(&methodFrame{
+		if err := t.w.WriteFrame(&methodFrame{
 			ChannelId: uint16(channel),
 			Method:    m,
-		})
+		}); err != nil {
+			// Handle error.
+			fmt.Errorf("error in client_test.send: server.writer.WriteFrame(methodFrame)")
+			return
+		}
 	}
 }
 
@@ -423,13 +441,29 @@ func TestConfirmMultipleOrdersDeliveryTags(t *testing.T) {
 
 	confirm := ch.NotifyPublish(make(chan Confirmation))
 
-	ch.Confirm(false)
+	if err := ch.Confirm(false); err != nil {
+		t.Fatalf("expected to enter confirm mode: %v", err)
+	}
 
 	go func() {
-		ch.Publish("", "q", false, false, Publishing{Body: []byte("pub 1")})
-		ch.Publish("", "q", false, false, Publishing{Body: []byte("pub 2")})
-		ch.Publish("", "q", false, false, Publishing{Body: []byte("pub 3")})
-		ch.Publish("", "q", false, false, Publishing{Body: []byte("pub 4")})
+		// Since publish is asynchronous an error can happen if the network connection
+		// is reset or if the server has run out of resources..
+		err := ch.Publish("", "q", false, false, Publishing{Body: []byte("pub 1")})
+		if err != nil {
+			log.Fatalf("channel.publish: pub 1}: %v", err)
+		}
+		err = ch.Publish("", "q", false, false, Publishing{Body: []byte("pub 2")})
+		if err != nil {
+			log.Fatalf("channel.publish: pub 2}: %v", err)
+		}
+		err = ch.Publish("", "q", false, false, Publishing{Body: []byte("pub 3")})
+		if err != nil {
+			log.Fatalf("channel.publish: pub 3}: %v", err)
+		}
+		err = ch.Publish("", "q", false, false, Publishing{Body: []byte("pub 4")})
+		if err != nil {
+			log.Fatalf("channel.publish: pub 4}: %v", err)
+		}
 	}()
 
 	// received out of order, consumed in order
